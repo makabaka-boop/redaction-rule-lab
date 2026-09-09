@@ -45,7 +45,7 @@ async function loadSample(): Promise<void> {
 
 <template>
   <section class="panel">
-    <h2>② 脱敏规则 <span class="hint">本地 JSON，字段含名称 / 正则 / 优先级 / 模板 / 必检</span></h2>
+    <h2>② 脱敏规则 <span class="hint">本地 JSON，字段含名称 / 正则 / 优先级 / 模板 / 必检 / 人工复核</span></h2>
     <textarea
       class="rules-input mono"
       :value="store.rulesText"
@@ -82,6 +82,7 @@ async function loadSample(): Promise<void> {
         <span class="rule-meta">
           优先级 {{ rule.priority }}
           <em v-if="rule.mustCheck" class="badge must">导出前必检</em>
+          <em v-if="rule.reviewRequired" class="badge review">人工复核</em>
           <em v-if="store.disabledRuleIds.has(rule.id)" class="badge off">已停用</em>
         </span>
         <code class="rule-pattern">/{{ rule.pattern }}/{{ rule.flags }}</code>

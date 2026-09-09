@@ -41,6 +41,9 @@ export function renderOutput(source: string, accepted: AcceptedInterval[]): Rend
       ruleName: interval.ruleName,
       priority: interval.priority,
       mustCheck: interval.mustCheck,
+      reviewRequired: interval.reviewRequired,
+      // 管线只产出“待确认”初始态；已确认状态由 store 依据稳定键对账写回。
+      reviewStatus: interval.reviewRequired ? ('pending' as const) : ('confirmed' as const),
       sourceStart: interval.start,
       sourceEnd: interval.end,
       sourceText: source.slice(interval.start, interval.end),

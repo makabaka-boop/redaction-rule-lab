@@ -18,6 +18,8 @@ export interface RedactionRule {
   template: string;
   /** 是否为导出前必检项：脱敏结果中不得再出现该规则的命中。 */
   mustCheck: boolean;
+  /** 是否为高风险人工复核项：该规则的每个保留区间须人工确认后才允许导出；缺省 false。 */
+  reviewRequired: boolean;
   /** 规则在规则列表中的顺序（0 起），用于同优先级裁决。 */
   order: number;
   /** 规则文件中的 enabled 初值；界面启停以此为基础。 */
@@ -63,6 +65,7 @@ export interface Candidate {
   ruleIndex: number;
   priority: number;
   mustCheck: boolean;
+  reviewRequired: boolean;
   start: number;
   end: number;
   /** 命中的原文片段。 */
@@ -103,6 +106,9 @@ export interface Segment {
   intervalIndex: number;
 }
 
+/** 人工复核状态：待确认 / 已确认。仅 reviewRequired 条目存在待确认态。 */
+export type ReviewStatus = 'pending' | 'confirmed';
+
 /** 审阅清单条目：与脱敏文本逐项对应。 */
 export interface ChecklistEntry {
   index: number;
@@ -110,6 +116,10 @@ export interface ChecklistEntry {
   ruleName: string;
   priority: number;
   mustCheck: boolean;
+  /** 该区间是否需要人工复核（来自命中规则的 reviewRequired）。 */
+  reviewRequired: boolean;
+  /** 人工确认状态；管线初始产出恒为 pending，已确认状态由 store 对账后写回。 */
+  reviewStatus: ReviewStatus;
   /** 原文区间与内容。 */
   sourceStart: number;
   sourceEnd: number;
@@ -133,6 +143,12 @@ export interface RunOk {
   checklist: ChecklistEntry[];
   /** 本次参与计算的规则（仅启用的）。 */
   activeRules: RedactionRule[];
+  /** 本次结果中要求人工复核的区间数。 */
+  reviewRequiredCount: number;
+  /** 其中已被人工确认的区间数（管线产出时恒为 0，store 对账后写回）。 */
+  reviewConfirmedCount: number;
+  /** 尚待人工确认的区间数。 */
+  reviewPendingCount: number;
 }
 
 /** 管线失败结果：不携带任何部分产物，调用方必须保留上一份有效结果。 */

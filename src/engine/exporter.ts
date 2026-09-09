@@ -23,6 +23,8 @@ export function buildExport(run: RunOk): ExportBundle {
     ruleName: item.ruleName,
     priority: item.priority,
     mustCheck: item.mustCheck,
+    reviewRequired: item.reviewRequired,
+    reviewStatus: item.reviewStatus,
     source: { start: item.sourceStart, end: item.sourceEnd, text: item.sourceText },
     output: { start: item.outputStart, end: item.outputEnd, text: item.outputText },
     replacement: item.replacement,
@@ -39,9 +41,14 @@ export function buildExport(run: RunOk): ExportBundle {
         id: rule.id,
         name: rule.name,
         priority: rule.priority,
-        mustCheck: rule.mustCheck
+        mustCheck: rule.mustCheck,
+        reviewRequired: rule.reviewRequired
       })),
       entryCount: entries.length,
+      // 人工复核汇总计数：导出闸门保证 pending 为 0 时才可能到达导出。
+      reviewRequiredCount: run.reviewRequiredCount,
+      reviewConfirmedCount: run.reviewConfirmedCount,
+      reviewPendingCount: run.reviewPendingCount,
       entries
     },
     null,
@@ -53,7 +60,28 @@ export function buildExport(run: RunOk): ExportBundle {
   if (maskedCount !== entries.length) {
     selfCheckErrors.push(`遮蔽块数量（${maskedCount}）与清单条目数（${entries.length}）不一致`);
   }
+  // 人工复核计数必须与清单逐项状态一致；任何待确认项都不允许进入导出物。
+  const requiredCount = run.checklist.filter((item) => item.reviewRequired).length;
+  const confirmedCount = run.checklist.filter(
+    (item) => item.reviewRequired && item.reviewStatus === 'confirmed'
+  ).length;
+  if (
+    requiredCount !== run.reviewRequiredCount ||
+    confirmedCount !== run.reviewConfirmedCount ||
+    requiredCount - confirmedCount !== run.reviewPendingCount
+  ) {
+    selfCheckErrors.push(
+      `人工复核汇总计数与清单状态不一致：汇总为 ${run.reviewConfirmedCount}/${run.reviewRequiredCount}（待确认 ${run.reviewPendingCount}），` +
+        `逐项统计为 ${confirmedCount}/${requiredCount}（待确认 ${requiredCount - confirmedCount}）`
+    );
+  }
   for (const item of run.checklist) {
+    if (item.reviewRequired && item.reviewStatus !== 'confirmed') {
+      selfCheckErrors.push(
+        `清单第 ${item.index + 1} 项（规则 ${item.ruleId}，原文区间 [${item.sourceStart}, ${item.sourceEnd})）` +
+          '仍待人工确认，禁止导出'
+      );
+    }
     const fromOutput = run.output.slice(item.outputStart, item.outputEnd);
     if (fromOutput !== item.outputText || fromOutput !== item.replacement) {
       selfCheckErrors.push(

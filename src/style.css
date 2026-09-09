@@ -111,6 +111,84 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .badge { font-style: normal; border-radius: 4px; padding: 1px 6px; font-size: 0.68rem; }
 .badge.must { background: #fee2e2; color: var(--err); }
 .badge.off { background: #e2e8f0; color: #475569; }
+.badge.review { background: #fef3c7; color: #92400e; }
+.badge.pending { background: #fef3c7; color: #b45309; }
+.badge.confirmed { background: #d1fae5; color: var(--ok); }
+
+/* 人工复核：待确认遮蔽块使用琥珀色虚边，与普通遮蔽块区分。 */
+.text-view .mask.review-pending {
+  background: #fde68a;
+  border-color: #b45309;
+  border-style: dashed;
+  box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.18);
+}
+.text-view .mask.review-confirmed { background: #d1fae5; border-color: var(--ok); color: #064e3b; }
+
+.review-summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  border: 1px solid #f59e0b;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+.review-summary .pending-text { color: #b45309; }
+.review-summary .confirmed-text { color: var(--ok); }
+
+.review-box {
+  margin-top: 12px;
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.review-state { margin: 0; font-size: 0.82rem; display: flex; gap: 8px; align-items: center; }
+
+.review-revoke {
+  border: 1px solid #b45309;
+  background: var(--warn-bg);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+.review-revoke-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.review-revoke ul { margin: 6px 0 0; padding-left: 18px; }
+.review-revoke li { margin: 3px 0; }
+button.linklike {
+  background: none;
+  border: none;
+  color: #92400e;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+button.linklike code { font-size: 0.76rem; }
+
+.review-progress {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  border: 1px solid #f59e0b;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+.review-progress.done { background: #ecfdf5; border-color: var(--ok); color: #065f46; }
+.review-progress strong { font-size: 0.9rem; }
+
+table.checklist tbody tr.pending { background: #fffbeb; }
+table.checklist tbody tr.pending:hover { background: #fef3c7; }
 
 .error-box {
   border: 1px solid var(--err);

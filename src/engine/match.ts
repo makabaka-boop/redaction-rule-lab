@@ -53,6 +53,7 @@ export function collectCandidates(
         ruleIndex: rule.order,
         priority: rule.priority,
         mustCheck: rule.mustCheck,
+        reviewRequired: rule.reviewRequired,
         start: match.index,
         end: match.index + match[0].length,
         matched: match[0],

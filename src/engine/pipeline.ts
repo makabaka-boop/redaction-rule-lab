@@ -44,7 +44,22 @@ export function runPipeline(
     return { ok: false, errors: residualErrors };
   }
 
-  return { ok: true, source, output, segments, accepted, rejected, checklist, activeRules };
+  // 人工复核计数：引擎只给出“需要确认”的区间，确认状态由 store 对账维护。
+  const reviewRequiredCount = checklist.filter((entry) => entry.reviewRequired).length;
+
+  return {
+    ok: true,
+    source,
+    output,
+    segments,
+    accepted,
+    rejected,
+    checklist,
+    activeRules,
+    reviewRequiredCount,
+    reviewConfirmedCount: 0,
+    reviewPendingCount: reviewRequiredCount
+  };
 }
 
 /**

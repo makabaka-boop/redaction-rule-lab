@@ -9,6 +9,7 @@ function cand(partial: Partial<Candidate> & { start: number; end: number }): Can
     ruleIndex: partial.ruleIndex ?? 0,
     priority: partial.priority ?? 10,
     mustCheck: partial.mustCheck ?? false,
+    reviewRequired: partial.reviewRequired ?? false,
     start: partial.start,
     end: partial.end,
     matched: partial.matched ?? 'x'.repeat(partial.end - partial.start),

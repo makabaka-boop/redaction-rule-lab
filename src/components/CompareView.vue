@@ -30,6 +30,17 @@ const sourcePieces = computed<SourcePiece[]>(() => {
 
 const outputSegments = computed<Segment[]>(() => store.run?.segments ?? []);
 
+/** 下标为待确认的高风险遮蔽块时为 true，供右侧遮蔽块添加醒目状态。 */
+function isPendingReview(intervalIndex: number): boolean {
+  const entry = store.run?.checklist.find((item) => item.index === intervalIndex);
+  return entry?.reviewRequired === true && entry.reviewStatus === 'pending';
+}
+
+function isConfirmedReview(intervalIndex: number): boolean {
+  const entry = store.run?.checklist.find((item) => item.index === intervalIndex);
+  return entry?.reviewRequired === true && entry.reviewStatus === 'confirmed';
+}
+
 function onSelect(index: number): void {
   selectInterval(index);
 }
@@ -80,8 +91,17 @@ watch(
               v-if="seg.kind === 'masked'"
               type="button"
               class="mask"
-              :class="{ selected: seg.intervalIndex === store.selectedInterval }"
+              :class="{
+                selected: seg.intervalIndex === store.selectedInterval,
+                'review-pending': isPendingReview(seg.intervalIndex),
+                'review-confirmed': isConfirmedReview(seg.intervalIndex)
+              }"
               :data-interval="seg.intervalIndex"
+              :data-review-status="isPendingReview(seg.intervalIndex)
+                ? 'pending'
+                : isConfirmedReview(seg.intervalIndex)
+                  ? 'confirmed'
+                  : 'none'"
               @click="onSelect(seg.intervalIndex)"
             >{{ seg.text }}</button>
             <span v-else>{{ seg.text }}</span>

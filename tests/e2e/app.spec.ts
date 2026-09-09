@@ -157,6 +157,102 @@ test('导出脱敏文本与审阅清单：两者逐项对应', async ({ page }) 
   expect(checklist.entries.length).toBe(maskedCount);
 });
 
+test('高风险人工复核：确认前锁定导出，确认后开放；原文变化撤销确认，重新确认后可下载', async ({ page }) => {
+  const exportRedacted = page.getByTestId('export-redacted');
+  const exportChecklist = page.getByTestId('export-checklist');
+
+  // 载入含 reviewRequired 规则的规则集：两个姓名命中都需要人工确认。
+  await page.locator('textarea.rules-input').fill(JSON.stringify({
+    rules: [
+      {
+        id: 'RV1',
+        name: '联系人姓名',
+        pattern: '(?<=联系人：)[\\u4e00-\\u9fa5]{2,4}',
+        flags: 'u',
+        priority: 80,
+        template: '[姓名]',
+        mustCheck: false,
+        reviewRequired: true
+      },
+      { id: 'P1', name: '手机号', pattern: '1[3-9]\\d{9}', priority: 90, template: '[手机号]', mustCheck: true }
+    ]
+  }));
+  await page.locator('textarea.source-input').fill('甲方联系人：王建国，电话 13800001111。乙方联系人：李晓梅，电话 13755556666。');
+  await expect(page.locator(outputMasks).first()).toBeVisible();
+
+  // 两个待确认项：脱敏结果照常展示，但导出入口锁定并显示数量。
+  await expect(page.getByTestId('review-pending-count')).toHaveText('2');
+  await expect(exportRedacted).toBeDisabled();
+  await expect(exportChecklist).toBeDisabled();
+  await expect(page.getByTestId('export-blocked')).toContainText('2');
+  await expect(page.locator('.mask.review-pending')).toHaveCount(2);
+
+  // 点击第一个遮蔽块，详情面板展示规则、原文范围、替换内容与裁决依据。
+  await page.locator('.mask.review-pending').first().click();
+  const detail = page.getByTestId('detail-panel');
+  await expect(detail).toContainText('RV1');
+  await expect(detail).toContainText('原始范围');
+  await expect(detail).toContainText('[姓名]');
+  await expect(detail).toContainText('裁决原因');
+  await expect(page.getByTestId('review-pending-badge')).toBeVisible();
+
+  // 确认当前项：数量变为 1，导出仍锁定。
+  await page.getByTestId('confirm-current').click();
+  await expect(page.getByTestId('review-pending-count')).toHaveText('1');
+  await expect(exportRedacted).toBeDisabled();
+
+  // 按原文顺序确认全部待办：计数清零，两个导出入口立即开放。
+  await page.getByTestId('confirm-all').click();
+  await expect(page.getByTestId('export-blocked')).toHaveCount(0);
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
+  await expect(page.locator('.mask.review-confirmed')).toHaveCount(2);
+
+  // 修改原文导致区间漂移：已确认状态撤销，页面给出可定位规则编号与区间的提示，导出重新锁定。
+  await page.locator('textarea.source-input').fill('【补充条款】甲方联系人：王建国，电话 13800001111。乙方联系人：李晓梅，电话 13755556666。');
+  await expect(page.getByTestId('review-revocation-banner')).toBeVisible();
+  await expect(page.locator('[data-testid="review-revocation-item"]').first()).toContainText('RV1');
+  await expect(page.locator('[data-testid="review-revocation-item"]').first()).toContainText(/\[\d+, \d+\)/);
+  await expect(page.getByTestId('review-pending-count')).toHaveText('2');
+  await expect(exportRedacted).toBeDisabled();
+  await expect(exportChecklist).toBeDisabled();
+
+  // 点击撤销提示可定位遮蔽块。
+  await page.locator('[data-testid="review-revocation-item"]').first().click();
+  await expect(page.locator(`${outputMasks}.selected`)).toHaveCount(1);
+
+  // 重新确认全部后成功下载两个文件。
+  await page.getByTestId('confirm-all').click();
+  await expect(exportRedacted).toBeEnabled();
+  const [redactedDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    exportRedacted.click()
+  ]);
+  const [checklistDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    exportChecklist.click()
+  ]);
+  const redactedPath = await redactedDownload.path();
+  const checklistPath = await checklistDownload.path();
+  expect(redactedPath).toBeTruthy();
+  expect(checklistPath).toBeTruthy();
+  const redacted = readFileSync(redactedPath as string, 'utf-8');
+  const checklist = JSON.parse(readFileSync(checklistPath as string, 'utf-8')) as {
+    reviewRequiredCount: number;
+    reviewConfirmedCount: number;
+    reviewPendingCount: number;
+    entries: Array<{ ruleId: string; reviewRequired: boolean; reviewStatus: string }>;
+  };
+  expect(redacted).not.toContain('王建国');
+  expect(redacted).toContain('[姓名]');
+  expect(checklist.reviewPendingCount).toBe(0);
+  expect(checklist.reviewRequiredCount).toBe(2);
+  expect(checklist.reviewConfirmedCount).toBe(2);
+  const reviewEntries = checklist.entries.filter((e) => e.reviewRequired);
+  expect(reviewEntries).toHaveLength(2);
+  expect(reviewEntries.every((e) => e.reviewStatus === 'confirmed')).toBe(true);
+});
+
 test('声明编码无法解码的本地文件：报错并锁定导出，成功读取后重新开放', async ({ page }) => {
   const exportRedacted = page.getByTestId('export-redacted');
   const exportChecklist = page.getByTestId('export-checklist');

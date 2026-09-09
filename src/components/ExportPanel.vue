@@ -5,6 +5,9 @@ import { buildExport, downloadTextFile } from '../engine/exporter';
 
 const exportError = ref('');
 
+/** 仅当结果中存在复核规则命中时才显示「人工复核」列，旧用法表格外观不变。 */
+const hasReviewEntries = computed(() => (store.run?.reviewRequiredCount ?? 0) > 0);
+
 /**
  * 导出前重新自检：清单与脱敏文本逐项对应，任何不一致都阻止导出。
  * 闸门同时覆盖规则解析错误与文件读取/解码错误：
@@ -60,6 +63,22 @@ function exportChecklist(): void {
       </span>
       <span v-else class="ok-note">清单与脱敏文本逐项对应，自检通过</span>
     </div>
+    <p
+      v-if="store.run.reviewRequiredCount > 0"
+      class="review-progress"
+      :class="{ done: store.run.reviewPendingCount === 0 }"
+      data-testid="review-progress"
+    >
+      <template v-if="store.run.reviewPendingCount > 0">
+        高风险遮蔽块尚有
+        <strong data-testid="review-pending-count">{{ store.run.reviewPendingCount }}</strong>
+        项待人工确认（已确认 {{ store.run.reviewConfirmedCount }} / {{ store.run.reviewRequiredCount }}），
+        请在「遮蔽块详情」中逐项确认或按原文顺序确认全部；确认完成前两个导出入口保持锁定。
+      </template>
+      <template v-else>
+        全部 {{ store.run.reviewRequiredCount }} 项高风险遮蔽块均已人工确认，导出入口已开放。
+      </template>
+    </p>
     <p v-if="exportError" class="error-line">{{ exportError }}</p>
 
     <table class="checklist" data-testid="checklist-table">
@@ -73,13 +92,14 @@ function exportChecklist(): void {
           <th>替换为</th>
           <th>输出区间</th>
           <th>必检</th>
+          <th v-if="hasReviewEntries">人工复核</th>
         </tr>
       </thead>
       <tbody>
         <tr
           v-for="entry in store.run.checklist"
           :key="entry.index"
-          :class="{ selected: entry.index === store.selectedInterval }"
+          :class="{ selected: entry.index === store.selectedInterval, pending: entry.reviewRequired && entry.reviewStatus === 'pending' }"
           @click="store.selectedInterval = entry.index"
         >
           <td>{{ entry.index + 1 }}</td>
@@ -90,6 +110,15 @@ function exportChecklist(): void {
           <td><code>{{ entry.replacement }}</code></td>
           <td>[{{ entry.outputStart }}, {{ entry.outputEnd }})</td>
           <td>{{ entry.mustCheck ? '是' : '否' }}</td>
+          <td v-if="hasReviewEntries">
+            <em
+              v-if="entry.reviewRequired"
+              class="badge"
+              :class="entry.reviewStatus === 'pending' ? 'pending' : 'confirmed'"
+              data-testid="review-cell"
+            >{{ entry.reviewStatus === 'pending' ? '待确认' : '已确认' }}</em>
+            <span v-else class="meta">—</span>
+          </td>
         </tr>
       </tbody>
     </table>

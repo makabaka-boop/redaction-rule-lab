@@ -12,6 +12,7 @@ interface RawRule {
   priority?: unknown;
   template?: unknown;
   mustCheck?: unknown;
+  reviewRequired?: unknown;
   enabled?: unknown;
 }
 
@@ -177,6 +178,14 @@ export function parseRulesJson(jsonText: string): ParseRulesResult {
         message: `规则 ${id}（第 ${index + 1} 条）：mustCheck 必须是布尔值`
       });
     }
+    if (raw.reviewRequired !== undefined && typeof raw.reviewRequired !== 'boolean') {
+      errors.push({
+        code: 'RULE_FIELD_INVALID',
+        ruleId: id,
+        ruleIndex: index,
+        message: `规则 ${id}（第 ${index + 1} 条）：reviewRequired 必须是布尔值`
+      });
+    }
     if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') {
       errors.push({
         code: 'RULE_FIELD_INVALID',
@@ -215,6 +224,7 @@ export function parseRulesJson(jsonText: string): ParseRulesResult {
         priority: raw.priority as number,
         template: raw.template as string,
         mustCheck: raw.mustCheck === true,
+        reviewRequired: raw.reviewRequired === true,
         enabledByDefault: raw.enabled !== false,
         order: index,
         regex
