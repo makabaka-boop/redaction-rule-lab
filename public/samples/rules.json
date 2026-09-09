@@ -1,0 +1,64 @@
+{
+  "rules": [
+    {
+      "id": "R1",
+      "name": "身份证号",
+      "pattern": "\\b\\d{17}[\\dXx]\\b",
+      "flags": "",
+      "priority": 100,
+      "template": "[证件号]",
+      "mustCheck": true,
+      "enabled": true
+    },
+    {
+      "id": "R2",
+      "name": "手机号",
+      "pattern": "\\b1[3-9]\\d{9}\\b",
+      "flags": "",
+      "priority": 90,
+      "template": "[手机号]",
+      "mustCheck": true,
+      "enabled": true
+    },
+    {
+      "id": "R3",
+      "name": "电子邮箱",
+      "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+      "flags": "",
+      "priority": 80,
+      "template": "[邮箱]",
+      "mustCheck": true,
+      "enabled": true
+    },
+    {
+      "id": "R4",
+      "name": "姓名（称谓后）",
+      "pattern": "(?<=（甲方）|（乙方）|联系人：|签字人：)[\\u4e00-\\u9fa5]{2,4}",
+      "flags": "u",
+      "priority": 70,
+      "template": "[姓名]",
+      "mustCheck": false,
+      "enabled": true
+    },
+    {
+      "id": "R5",
+      "name": "银行账号",
+      "pattern": "\\b\\d{16,19}\\b",
+      "flags": "",
+      "priority": 60,
+      "template": "[银行账号]",
+      "mustCheck": false,
+      "enabled": true
+    },
+    {
+      "id": "R6",
+      "name": "统一社会信用代码",
+      "pattern": "\\b[0-9A-HJ-NPQRTUWXY]{2}\\d{6}[0-9A-HJ-NPQRTUWXY]{10}\\b",
+      "flags": "",
+      "priority": 50,
+      "template": "[信用代码]",
+      "mustCheck": false,
+      "enabled": true
+    }
+  ]
+}
