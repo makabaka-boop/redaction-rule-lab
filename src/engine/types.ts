@@ -52,6 +52,8 @@ export interface EngineError {
   end?: number;
   /** 相关文件名（文件读取/解码错误）。 */
   file?: string;
+  /** 输入来源标记：界面据此按来源清理文件错误（原文面板 / 规则面板）。 */
+  scope?: 'source' | 'rules';
 }
 
 /** 单条命中候选（替换前）。 */

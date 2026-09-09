@@ -13,10 +13,14 @@ async function onFileChange(event: Event): Promise<void> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const decoded = decodeBytes(bytes, encoding.value, file.name);
   if (decoded.ok) {
-    store.ioErrors = store.ioErrors.filter((e) => e.file !== file.name);
+    // 成功读取：applyRulesText 会清除规则来源的读取/解码错误并触发重算。
     applyRulesText(decoded.text);
   } else {
-    store.ioErrors = [...store.ioErrors.filter((e) => e.file !== file.name), decoded.error];
+    // 失败：沿用上一份有效规则，记录带来源标记的错误，导出闸门随之锁定。
+    store.ioErrors = [
+      ...store.ioErrors.filter((e) => e.scope !== 'rules'),
+      { ...decoded.error, scope: 'rules' as const }
+    ];
   }
   input.value = '';
 }
@@ -28,8 +32,12 @@ async function loadSample(): Promise<void> {
     applyRulesText(await res.text());
   } catch {
     store.ioErrors = [
-      ...store.ioErrors,
-      { code: 'RULES_JSON_INVALID', message: '内置示例规则加载失败，请改用粘贴或本地文件' }
+      ...store.ioErrors.filter((e) => e.scope !== 'rules'),
+      {
+        code: 'RULES_JSON_INVALID' as const,
+        message: '内置示例规则加载失败，请改用粘贴或本地文件',
+        scope: 'rules' as const
+      }
     ];
   }
 }

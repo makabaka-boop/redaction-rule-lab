@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { store } from '../store';
+import { exportBlockReason, store } from '../store';
 import { buildExport, downloadTextFile } from '../engine/exporter';
 
 const exportError = ref('');
 
-/** 导出前重新自检：清单与脱敏文本逐项对应，任何不一致都阻止导出。 */
+/**
+ * 导出前重新自检：清单与脱敏文本逐项对应，任何不一致都阻止导出。
+ * 闸门同时覆盖规则解析错误与文件读取/解码错误：
+ * 旧结果可以展示，但与当前输入不一致时不得外发。
+ */
 const exportState = computed(() => {
-  if (!store.run) return { ready: false as const, reason: '暂无有效结果' };
-  if (store.runErrors.length > 0) {
-    return { ready: false as const, reason: '当前输入未通过校验，已锁定导出' };
+  const blocked = exportBlockReason();
+  const run = store.run;
+  if (blocked !== null || run === null) {
+    return { ready: false as const, reason: blocked ?? '暂无有效结果' };
   }
-  const bundle = buildExport(store.run);
+  const bundle = buildExport(run);
   if (bundle.selfCheckErrors.length > 0) {
     return { ready: false as const, reason: `一致性自检失败：${bundle.selfCheckErrors[0]}` };
   }

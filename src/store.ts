@@ -64,6 +64,8 @@ export function recompute(): void {
 
 /** 解析规则文本；失败时保留上一份有效规则集，只展示错误。 */
 export function applyRulesText(text: string): void {
+  // 规则内容以本次输入为准：此前针对规则文件的读取/解码错误随之失效。
+  clearIoErrors('rules');
   store.rulesText = text;
   const parsed = parseRulesJson(text);
   if (parsed.ok) {
@@ -85,9 +87,37 @@ export function applyRulesText(text: string): void {
 }
 
 export function setSourceText(text: string): void {
+  // 原文以本次输入为准：此前针对原文文件的读取/解码错误随之失效。
+  clearIoErrors('source');
   store.sourceText = text;
   store.selectedInterval = -1;
   scheduleRecompute();
+}
+
+/** 清除某一输入来源（原文 / 规则）的文件读取与解码错误。 */
+export function clearIoErrors(scope: 'source' | 'rules'): void {
+  if (store.ioErrors.some((error) => error.scope === scope)) {
+    store.ioErrors = store.ioErrors.filter((error) => error.scope !== scope);
+  }
+}
+
+/**
+ * 导出闸门：上一份有效结果可以继续展示，但只要当前输入存在
+ * 规则解析错误、文件读取/解码错误或本次计算错误，两个导出入口都锁定，
+ * 避免把与当前输入不一致的旧结果误外发。返回 null 表示允许导出。
+ */
+export function exportBlockReason(): string | null {
+  if (store.run === null) return '暂无有效结果';
+  if (store.ruleErrors.length > 0) {
+    return '当前规则存在解析错误，展示的是上一份有效结果，与最新规则不一致';
+  }
+  if (store.ioErrors.length > 0) {
+    return '当前存在文件读取或解码错误，展示的是上一份有效结果，与最新输入不一致';
+  }
+  if (store.runErrors.length > 0) {
+    return '当前输入未通过校验，展示的是上一份有效结果';
+  }
+  return null;
 }
 
 export function toggleRule(ruleId: string, enabled: boolean): void {

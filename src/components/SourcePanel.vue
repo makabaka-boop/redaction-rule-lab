@@ -15,10 +15,14 @@ async function onFileChange(event: Event): Promise<void> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const decoded = decodeBytes(bytes, encoding.value, file.name);
   if (decoded.ok) {
-    store.ioErrors = store.ioErrors.filter((e) => e.file !== file.name);
+    // 成功读取：setSourceText 会清除原文来源的读取/解码错误并触发重算。
     setSourceText(decoded.text);
   } else {
-    store.ioErrors = [...store.ioErrors.filter((e) => e.file !== file.name), decoded.error];
+    // 失败：保留旧原文与旧结果，记录带来源标记的错误，导出闸门随之锁定。
+    store.ioErrors = [
+      ...store.ioErrors.filter((e) => e.scope !== 'source'),
+      { ...decoded.error, scope: 'source' as const }
+    ];
   }
   input.value = '';
 }
@@ -36,8 +40,12 @@ async function loadSample(): Promise<void> {
     fileName.value = '内置示例 contract.txt';
   } catch {
     store.ioErrors = [
-      ...store.ioErrors,
-      { code: 'DECODE_FAILED', message: '内置示例文本加载失败，请改用粘贴或本地文件' }
+      ...store.ioErrors.filter((e) => e.scope !== 'source'),
+      {
+        code: 'DECODE_FAILED' as const,
+        message: '内置示例文本加载失败，请改用粘贴或本地文件',
+        scope: 'source' as const
+      }
     ];
   }
 }

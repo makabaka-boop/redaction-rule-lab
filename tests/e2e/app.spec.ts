@@ -44,7 +44,12 @@ test('逐条启停规则后立即重新计算', async ({ page }) => {
   await expect(page.locator(outputMasks)).toHaveCount(before);
 });
 
-test('非法正则：报错含规则编号，上一份有效结果不被污染', async ({ page }) => {
+test('非法正则：报错含规则编号，旧结果不污染且导出锁定，恢复后重新开放', async ({ page }) => {
+  const exportRedacted = page.getByTestId('export-redacted');
+  const exportChecklist = page.getByTestId('export-checklist');
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
+
   const before = await page.locator(outputMasks).count();
   await page.locator('textarea.rules-input').fill(JSON.stringify({
     rules: [
@@ -55,9 +60,22 @@ test('非法正则：报错含规则编号，上一份有效结果不被污染',
   await expect(errorBox).toBeVisible();
   await expect(errorBox).toContainText('BROKEN');
   await expect(errorBox).toContainText('第 1 条');
-  // 上一份有效结果仍然展示，导出仍可用。
+  // 上一份有效结果仍然展示、不被污染，但两个导出入口都锁定。
   await expect(page.locator(outputMasks)).toHaveCount(before);
-  await expect(page.getByTestId('export-redacted')).toBeEnabled();
+  await expect(exportRedacted).toBeDisabled();
+  await expect(exportChecklist).toBeDisabled();
+  await expect(page.getByTestId('export-blocked')).toContainText('规则');
+
+  // 恢复合法规则并重新计算后，导出重新开放。
+  await page.locator('textarea.rules-input').fill(JSON.stringify({
+    rules: [
+      { id: 'OK1', name: '手机号', pattern: '1[3-9]\\d{9}', priority: 90, template: '[手机号]', mustCheck: true }
+    ]
+  }));
+  await expect(page.locator('.error-box.rule')).toHaveCount(0);
+  await expect(page.getByTestId('export-blocked')).toHaveCount(0);
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
 });
 
 test('零长度匹配：整次计算失败并给出规则编号与字符位置，导出锁定', async ({ page }) => {
@@ -139,9 +157,15 @@ test('导出脱敏文本与审阅清单：两者逐项对应', async ({ page }) 
   expect(checklist.entries.length).toBe(maskedCount);
 });
 
-test('声明编码无法解码的本地文件：报错含文件名与字节位置', async ({ page }) => {
+test('声明编码无法解码的本地文件：报错并锁定导出，成功读取后重新开放', async ({ page }) => {
+  const exportRedacted = page.getByTestId('export-redacted');
+  const exportChecklist = page.getByTestId('export-checklist');
+  await expect(exportRedacted).toBeEnabled();
+  const before = await page.locator(outputMasks).count();
+  const fileInput = page.locator('.panel').first().locator('input[type="file"]');
+
   // 0xC3 0x28 不是合法 UTF-8 序列。
-  await page.locator('.panel').first().locator('input[type="file"]').setInputFiles({
+  await fileInput.setInputFiles({
     name: 'broken.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from([0x41, 0xc3, 0x28, 0x42])
@@ -150,4 +174,24 @@ test('声明编码无法解码的本地文件：报错含文件名与字节位�
   await expect(errorBox).toBeVisible();
   await expect(errorBox).toContainText('broken.txt');
   await expect(errorBox).toContainText('第 1 字节');
+  // 旧结果继续展示、不被污染，但两个导出入口都锁定。
+  await expect(page.locator(outputMasks)).toHaveCount(before);
+  await expect(exportRedacted).toBeDisabled();
+  await expect(exportChecklist).toBeDisabled();
+  await expect(page.getByTestId('export-blocked')).toContainText('文件');
+
+  // 成功读取合法文件并重新计算后，错误清除、导出重新开放。
+  await fileInput.setInputFiles({
+    name: 'ok.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(new TextEncoder().encode('联系人电话 13911112222。'))
+  });
+  await expect(page.locator('.error-box.io')).toHaveCount(0);
+  await expect(page.getByTestId('export-blocked')).toHaveCount(0);
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
+  // 新内容已完成脱敏计算。
+  const outputText = await page.locator('[data-testid="output-pane"] .text-view').innerText();
+  expect(outputText).toContain('[手机号]');
+  expect(outputText).not.toContain('13911112222');
 });
