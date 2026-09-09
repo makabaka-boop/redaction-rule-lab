@@ -5,10 +5,16 @@ import type { ChecklistEntry, RunOk } from './types';
  * 只在三者与新结果【完全对应】时，旧确认才会在重算后保留：
  * 规则启停、原文或模板任何一处变化导致三元组不同，旧确认立即失效，
  * 避免旧结果对新结果构成误授权。
+ *
+ * 编码必须无歧义：规则编号与替换内容都可能包含制表符等任意字符，
+ * 直接用分隔符拼接会让不同的三元组得到同一个键（例如
+ * ("A\t1", 2, 3, "X") 与 ("A", 1, 2, "3\tX") 在 \t 拼接下碰撞，
+ * 旧确认会错误授权新条目）。这里对【定长 JSON 数组】做序列化：
+ * 字符串恒带引号且制表符/引号/反斜杠均被转义，数字恒无引号，
+ * 因此编码是单射——四个组成值任一变化都得到不同的键。
  */
 export function reviewKey(ruleId: string, sourceStart: number, sourceEnd: number, replacement: string): string {
-  // 字段之间使用制表符分隔（替换内容允许含任意字符，置于末尾即可避免拼接歧义）。
-  return [ruleId, String(sourceStart), String(sourceEnd), replacement].join('\t');
+  return JSON.stringify([ruleId, sourceStart, sourceEnd, replacement]);
 }
 
 /** 取一个清单条目的稳定键。 */

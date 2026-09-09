@@ -139,11 +139,76 @@ describe('稳定键：由规则编号、原文区间、替换内容组成', () =
 
   it('稳定键三元组确定，且清单条目可还原同一键', () => {
     const key = reviewKey('RV1', 4, 7, '[姓名]');
-    expect(key).toBe('RV1\t4\t7\t[姓名]');
+    expect(key).toBe(JSON.stringify(['RV1', 4, 7, '[姓名]']));
     readyRun();
     const run = store.run as RunOk;
     const entry = run.checklist.find((e) => e.ruleId === 'RV1') as (typeof run.checklist)[number];
     expect(entryKey(entry)).toBe(reviewKey('RV1', entry.sourceStart, entry.sourceEnd, entry.replacement));
+  });
+
+  it('无歧义编码：编号/替换内容含制表符时不发生跨三元组碰撞', () => {
+        // 直接拼接 \t 会让两者同为 "A\t1\t2\t3\tX"，从而错误继承确认。
+    const confirmed = reviewKey('A\t1', 2, 3, 'X');
+    const recomputed = reviewKey('A', 1, 2, '3\tX');
+    expect(confirmed).not.toBe(recomputed);
+    // 四个组成值逐一变化都产生不同的键。
+    expect(reviewKey('A', 1, 2, 'X')).not.toBe(reviewKey('B', 1, 2, 'X'));
+    expect(reviewKey('A', 1, 2, 'X')).not.toBe(reviewKey('A', 9, 2, 'X'));
+    expect(reviewKey('A', 1, 2, 'X')).not.toBe(reviewKey('A', 1, 9, 'X'));
+    expect(reviewKey('A', 1, 2, 'X')).not.toBe(reviewKey('A', 1, 2, 'Y'));
+    // 引号、反斜杠等 JSON 特殊字符同样不得制造碰撞。
+    expect(reviewKey('A","x",[1,2', 3, 4, 'X')).not.toBe(reviewKey('A', 1, 2, 'x'));
+    // 同一三元组两次编码完全一致（确定性）。
+    expect(reviewKey('A\t1', 2, 3, 'X\t"\n')).toBe(reviewKey('A\t1', 2, 3, 'X\t"\n'));
+  });
+
+  it('碰撞回归：编号与替换内容含制表符的重算不会继承旧确认，新条目保持待确认', () => {
+    // 旧结果：规则编号 "A\t1"，命中源文 [2,3)，替换内容 "X"——确认之。
+    applyRulesText(
+      JSON.stringify({
+        rules: [
+          { id: 'A\t1', name: '含制表符编号', pattern: 'c', priority: 10, template: 'X', reviewRequired: true }
+        ]
+      })
+    );
+    setSourceText('abc');
+    recompute();
+    let run = store.run as RunOk;
+    expect(run.checklist).toHaveLength(1);
+    expect([run.checklist[0].sourceStart, run.checklist[0].sourceEnd]).toEqual([2, 3]);
+    expect(run.checklist[0].replacement).toBe('X');
+    confirmAllPending();
+    expect(run.reviewConfirmedCount).toBe(1);
+    // 旧的 \t 拼接方案下该键即 "A\t1\t2\t3\tX"。
+    expect(store.confirmedReviewKeys.has('A\t1\t2\t3\tX')).toBe(false);
+    expect(store.confirmedReviewKeys.has(reviewKey('A\t1', 2, 3, 'X'))).toBe(true);
+
+    // 新结果：三元组 ("A", [1,2), "3\tX")——\t 拼接时与旧键碰撞为同一串。
+    applyRulesText(
+      JSON.stringify({
+        rules: [
+          { id: 'A', name: '另一规则', pattern: 'b', priority: 10, template: '3\tX', reviewRequired: true }
+        ]
+      })
+    );
+    recompute();
+    run = store.run as RunOk;
+    expect(run.checklist).toHaveLength(1);
+    expect(run.checklist[0].ruleId).toBe('A');
+    expect([run.checklist[0].sourceStart, run.checklist[0].sourceEnd]).toEqual([1, 2]);
+    expect(run.checklist[0].replacement).toBe('3\tX');
+    // 无歧义编码下新条目不得继承旧确认：保持待确认、计数清零、导出锁定。
+    expect(run.reviewRequiredCount).toBe(1);
+    expect(run.reviewConfirmedCount).toBe(0);
+    expect(run.reviewPendingCount).toBe(1);
+    expect(run.checklist[0].reviewStatus).toBe('pending');
+    expect(store.confirmedReviewKeys.size).toBe(0);
+    expect(store.reviewRevocations).toHaveLength(1);
+    expect(store.reviewRevocations[0].ruleId).toBe('A\t1');
+    expect([store.reviewRevocations[0].start, store.reviewRevocations[0].end]).toEqual([2, 3]);
+    expect(exportBlockReason()).toContain('待人工确认');
+    const bundle = buildExport(run);
+    expect(bundle.selfCheckErrors.some((msg) => msg.includes('仍待人工确认'))).toBe(true);
   });
 
   it('替换内容不同（模板变化）则键不同', () => {

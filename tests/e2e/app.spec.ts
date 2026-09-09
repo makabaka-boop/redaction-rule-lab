@@ -253,6 +253,50 @@ test('高风险人工复核：确认前锁定导出，确认后开放；原文�
   expect(reviewEntries.every((e) => e.reviewStatus === 'confirmed')).toBe(true);
 });
 
+test('稳定键无歧义：编号/替换内容含制表符时，碰撞三元组不继承旧确认', async ({ page }) => {
+  const exportRedacted = page.getByTestId('export-redacted');
+  const exportChecklist = page.getByTestId('export-checklist');
+
+  // 旧结果：规则编号 "A\t1"，源文 abc 中 c 位于 [2,3)，替换内容 "X"。
+  await page.locator('textarea.rules-input').fill(JSON.stringify({
+    rules: [
+      { id: 'A\t1', name: '含制表符编号', pattern: 'c', priority: 10, template: 'X', reviewRequired: true }
+    ]
+  }));
+  await page.locator('textarea.source-input').fill('abc');
+  await expect(page.locator(outputMasks).first()).toBeVisible();
+  await expect(page.getByTestId('review-pending-count')).toHaveText('1');
+
+  // 确认旧条目后两个入口开放。
+  await page.locator('.mask.review-pending').first().click();
+  await page.getByTestId('confirm-current').click();
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
+
+  // 新结果三元组 ("A", [1,2), "3\tX")：\t 直接拼接时与旧键 A\t1\t2\t3\tX 碰撞。
+  await page.locator('textarea.rules-input').fill(JSON.stringify({
+    rules: [
+      { id: 'A', name: '另一规则', pattern: 'b', priority: 10, template: '3\tX', reviewRequired: true }
+    ]
+  }));
+
+  // 新条目保持待确认、出现可定位区间的撤销提示、两个下载入口仍锁定。
+  await expect(page.getByTestId('review-pending-count')).toHaveText('1');
+  const banner = page.getByTestId('review-revocation-banner');
+  await expect(banner).toBeVisible();
+  await expect(page.locator('[data-testid="review-revocation-item"]').first()).toContainText('[2, 3)');
+  await expect(page.locator('.mask.review-pending')).toHaveCount(1);
+  await expect(exportRedacted).toBeDisabled();
+  await expect(exportChecklist).toBeDisabled();
+  await expect(page.getByTestId('export-blocked')).toContainText('1');
+
+  // 重新确认后才开放。
+  await page.locator('.mask.review-pending').first().click();
+  await page.getByTestId('confirm-current').click();
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
+});
+
 test('声明编码无法解码的本地文件：报错并锁定导出，成功读取后重新开放', async ({ page }) => {
   const exportRedacted = page.getByTestId('export-redacted');
   const exportChecklist = page.getByTestId('export-checklist');
