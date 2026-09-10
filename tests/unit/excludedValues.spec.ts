@@ -207,6 +207,76 @@ describe('excludedValues 匹配语义', () => {
     expect(result.output).toBe('编号 [C] 与 ABC123。');
   });
 
+  it('i/u 标志下按 Unicode 大小写折叠比较：ſ 与 S 等价', () => {
+    const rules = makeRules([
+      {
+        id: 'R1',
+        name: '长 s',
+        pattern: '[sſ]',
+        flags: 'iu',
+        priority: 10,
+        template: '[X]',
+        excludedValues: ['S']
+      }
+    ]);
+    const result = runPipeline('ſ', rules);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 正则命中 "ſ"，例外值 "S" 在 iu 语义下与之等价：进入 excluded，原文保持未遮蔽。
+    expect(result.excluded).toHaveLength(1);
+    expect(result.excluded[0]).toMatchObject({ ruleId: 'R1', start: 0, end: 1, matched: 'ſ' });
+    expect(result.accepted).toHaveLength(0);
+    expect(result.output).toBe('ſ');
+  });
+
+  it('i/u 大小写等价严格跟随规则标志：iu 折叠 ẞ→ß，仅 i 不折叠', () => {
+    const defs = (flags: string): unknown => ({
+      id: 'R1',
+      name: '尖 s',
+      pattern: 'ß|ẞ',
+      flags,
+      priority: 10,
+      template: '[X]',
+      excludedValues: ['ß']
+    });
+    // iu：Unicode 简单大小写折叠，ẞ 与 ß 等价，两处命中都被剔除。
+    const withU = runPipeline('ß-ẞ', makeRules([defs('iu')]));
+    expect(withU.ok).toBe(true);
+    if (!withU.ok) return;
+    expect(withU.excluded.map((e) => e.matched)).toEqual(['ß', 'ẞ']);
+    expect(withU.accepted).toHaveLength(0);
+    expect(withU.output).toBe('ß-ẞ');
+
+    // 仅 i（无 u）：传统规范化不折叠 ẞ，例外只精确命中 ß。
+    const noU = runPipeline('ß-ẞ', makeRules([defs('i')]));
+    expect(noU.ok).toBe(true);
+    if (!noU.ok) return;
+    expect(noU.excluded.map((e) => e.matched)).toEqual(['ß']);
+    expect(noU.accepted).toHaveLength(1);
+    expect(noU.output).toBe('ß-[X]');
+  });
+
+  it('例外值含正则元字符时按字面量比较，不被当作模式', () => {
+    const rules = makeRules([
+      {
+        id: 'R1',
+        name: '编号',
+        pattern: '[A-Z0-9.()]{4,}',
+        priority: 10,
+        template: '[N]',
+        excludedValues: ['HT.(1)']
+      }
+    ]);
+    const result = runPipeline('HT.(1) 与 HTX(1)。', rules);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // "HT.(1)" 全量相等被剔除；"HTX(1)" 若把例外当正则会被 ^HT.(1)$ 误伤，此处必须保留遮蔽。
+    expect(result.excluded).toHaveLength(1);
+    expect(result.excluded[0].matched).toBe('HT.(1)');
+    expect(result.accepted).toHaveLength(1);
+    expect(result.output).toBe('HT.(1) 与 [N]。');
+  });
+
   it('RunOk.excluded 携带规则编号、原文区间与命中文本，跨规则按原文顺序排列', () => {
     const rules = makeRules([
       { id: 'RA', name: '甲', pattern: 'bbb', priority: 10, template: '[A]', excludedValues: ['bbb'] },
