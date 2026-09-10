@@ -36,6 +36,9 @@ export function collectCandidates(
     //     构造“仅字面量”的全串匹配正则。u 标志启用 Unicode 简单大小写折叠
     //     （如 ſ 与 S、ẞ 与 ß 等价），与命中阶段的大小写行为严格一致；
     //     简单的 toLowerCase 比较无法覆盖这些等价关系。
+    //     构造时必须剥离 m 标志：^/$ 在 m 下退化为行边界，会把
+    //     “末行等于例外值”的多行命中误判为全量相等；m 对纯字面量的
+    //     全串比较本无意义（s 同理无害，但保留不影响结果）。
     const ignoreCase = rule.flags.includes('i');
     let excludedSet: Set<string> | null = null;
     let excludedRegex: RegExp | null = null;
@@ -44,7 +47,8 @@ export function collectCandidates(
         const literals = rule.excludedValues.map((value) =>
           value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         );
-        excludedRegex = new RegExp(`^(?:${literals.join('|')})$`, rule.flags);
+        const compareFlags = rule.flags.replace('m', '');
+        excludedRegex = new RegExp(`^(?:${literals.join('|')})$`, compareFlags);
       } else {
         excludedSet = new Set(rule.excludedValues);
       }

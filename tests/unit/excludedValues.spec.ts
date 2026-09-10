@@ -277,6 +277,59 @@ describe('excludedValues 匹配语义', () => {
     expect(result.output).toBe('HT.(1) 与 [N]。');
   });
 
+  it('im 标志下多行命中不被误排除：只有整个命中文本等于例外值才剔除', () => {
+    const rules = makeRules([
+      {
+        id: 'R1',
+        name: '全文',
+        pattern: '[\\s\\S]+',
+        flags: 'im',
+        priority: 10,
+        template: '[X]',
+        excludedValues: ['S']
+      }
+    ]);
+    // 命中 "X\nS"：末行恰为 S，但整个命中文本不与例外值全量相等，必须进入 accepted 并被模板替换。
+    const multi = runPipeline('X\nS', rules);
+    expect(multi.ok).toBe(true);
+    if (!multi.ok) return;
+    expect(multi.excluded).toHaveLength(0);
+    expect(multi.accepted).toHaveLength(1);
+    expect(multi.accepted[0].matched).toBe('X\nS');
+    expect(multi.output).toBe('[X]');
+
+    // 命中恰好就是 "S"：整个命中文本与例外值相等，正常剔除。
+    const exact = runPipeline('S', rules);
+    expect(exact.ok).toBe(true);
+    if (!exact.ok) return;
+    expect(exact.excluded).toHaveLength(1);
+    expect(exact.excluded[0].matched).toBe('S');
+    expect(exact.accepted).toHaveLength(0);
+    expect(exact.output).toBe('S');
+  });
+
+  it('剥离 m 不影响 i/u 的大小写等价：多行原文中各行命中仍按 i 语义剔除', () => {
+    const rules = makeRules([
+      {
+        id: 'R1',
+        name: '单词',
+        pattern: '[a-z]+',
+        flags: 'im',
+        priority: 10,
+        template: '[X]',
+        excludedValues: ['abc']
+      }
+    ]);
+    // "ABC" 与例外值按 i 语义等价被剔除；"xyz" 不在例外中，保留遮蔽。
+    const result = runPipeline('ABC\nxyz', rules);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.excluded).toHaveLength(1);
+    expect(result.excluded[0]).toMatchObject({ start: 0, end: 3, matched: 'ABC' });
+    expect(result.accepted).toHaveLength(1);
+    expect(result.output).toBe('ABC\n[X]');
+  });
+
   it('RunOk.excluded 携带规则编号、原文区间与命中文本，跨规则按原文顺序排列', () => {
     const rules = makeRules([
       { id: 'RA', name: '甲', pattern: 'bbb', priority: 10, template: '[A]', excludedValues: ['bbb'] },
