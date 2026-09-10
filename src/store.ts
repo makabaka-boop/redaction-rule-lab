@@ -37,6 +37,8 @@ export const store = reactive({
   ioErrors: [] as EngineError[],
   /** 当前选中的遮蔽块（accepted 下标），-1 表示未选中。 */
   selectedInterval: -1,
+  /** 详情区当前展示例外命中（未遮蔽片段）的规则编号；null 表示未查看。 */
+  excludedViewRuleId: null as string | null,
   /** 已人工确认区间的稳定键集合（规则编号 + 原文区间 + 替换内容）。 */
   confirmedReviewKeys: new Set<string>(),
   /** 最近一次成功重算中被撤销的确认（重算成功时刷新；失败保留，与上一份有效结果一致）。 */
@@ -176,6 +178,15 @@ export function toggleRule(ruleId: string, enabled: boolean): void {
 
 export function selectInterval(index: number): void {
   store.selectedInterval = index;
+}
+
+/** 点击规则面板的排除数：在详情区查看/收起该规则被例外剔除的未遮蔽片段。 */
+export function toggleExcludedView(ruleId: string): void {
+  store.excludedViewRuleId = store.excludedViewRuleId === ruleId ? null : ruleId;
+}
+
+export function closeExcludedView(): void {
+  store.excludedViewRuleId = null;
 }
 
 /** 确认当前选中的遮蔽块；只对要求复核且仍待确认的区间生效。 */

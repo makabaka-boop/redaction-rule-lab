@@ -47,6 +47,11 @@ export function runPipeline(
   // 人工复核计数：引擎只给出“需要确认”的区间，确认状态由 store 对账维护。
   const reviewRequiredCount = checklist.filter((entry) => entry.reviewRequired).length;
 
+  // 被例外值剔除的命中按原文顺序排列，供规则面板计数与详情区逐项核对。
+  const excluded = [...collected.excluded].sort(
+    (a, b) => a.start - b.start || a.end - b.end || a.ruleIndex - b.ruleIndex
+  );
+
   return {
     ok: true,
     source,
@@ -54,6 +59,7 @@ export function runPipeline(
     segments,
     accepted,
     rejected,
+    excluded,
     checklist,
     activeRules,
     reviewRequiredCount,

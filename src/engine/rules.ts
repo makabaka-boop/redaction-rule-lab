@@ -14,6 +14,7 @@ interface RawRule {
   mustCheck?: unknown;
   reviewRequired?: unknown;
   enabled?: unknown;
+  excludedValues?: unknown;
 }
 
 /**
@@ -195,6 +196,53 @@ export function parseRulesJson(jsonText: string): ParseRulesResult {
       });
     }
 
+    // 例外值：可选字符串数组，缺省为空。非字符串、空字符串或重复项
+    // 都定位到规则编号与数组下标；任一非法即整条规则解析失败，
+    // 调用方据此保留上一份有效规则集。
+    let excludedValues: string[] = [];
+    if (raw.excludedValues !== undefined) {
+      if (!Array.isArray(raw.excludedValues)) {
+        errors.push({
+          code: 'RULE_FIELD_INVALID',
+          ruleId: id,
+          ruleIndex: index,
+          message: `规则 ${id}（第 ${index + 1} 条）：excludedValues 必须是字符串数组`
+        });
+      } else {
+        const seenValues = new Set<string>();
+        (raw.excludedValues as unknown[]).forEach((item, itemIndex) => {
+          if (typeof item !== 'string') {
+            errors.push({
+              code: 'RULE_FIELD_INVALID',
+              ruleId: id,
+              ruleIndex: index,
+              position: itemIndex,
+              message: `规则 ${id}（第 ${index + 1} 条）：excludedValues 第 ${itemIndex} 项必须是字符串`
+            });
+          } else if (item === '') {
+            errors.push({
+              code: 'RULE_FIELD_INVALID',
+              ruleId: id,
+              ruleIndex: index,
+              position: itemIndex,
+              message: `规则 ${id}（第 ${index + 1} 条）：excludedValues 第 ${itemIndex} 项是空字符串，例外值必须非空`
+            });
+          } else if (seenValues.has(item)) {
+            errors.push({
+              code: 'RULE_FIELD_INVALID',
+              ruleId: id,
+              ruleIndex: index,
+              position: itemIndex,
+              message: `规则 ${id}（第 ${index + 1} 条）：excludedValues 第 ${itemIndex} 项 "${item}" 与前面的例外值重复`
+            });
+          } else {
+            seenValues.add(item);
+          }
+        });
+        excludedValues = raw.excludedValues as string[];
+      }
+    }
+
     let regex: RegExp | null = null;
     if (typeof raw.pattern === 'string' && raw.pattern !== '') {
       try {
@@ -226,6 +274,7 @@ export function parseRulesJson(jsonText: string): ParseRulesResult {
         mustCheck: raw.mustCheck === true,
         reviewRequired: raw.reviewRequired === true,
         enabledByDefault: raw.enabled !== false,
+        excludedValues,
         order: index,
         regex
       });

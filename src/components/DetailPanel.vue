@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import {
+  closeExcludedView,
   confirmAllPending,
   confirmInterval,
   dismissReviewRevocations,
@@ -48,6 +49,24 @@ const neighbours = computed(() => {
   return run.accepted.filter(
     (acc) => acc !== sel && acc.start < sel.end && sel.start < acc.end
   );
+});
+
+/**
+ * 规则面板点选的要查看例外命中的规则：列出当前有效结果中该规则
+ * 被例外值剔除的未遮蔽片段；管线产出已按原文顺序排序。
+ */
+const excludedView = computed(() => {
+  const ruleId = store.excludedViewRuleId;
+  const run = store.run;
+  if (ruleId === null || !run) return null;
+  const rule =
+    run.activeRules.find((item) => item.id === ruleId) ??
+    store.rules.find((item) => item.id === ruleId);
+  return {
+    ruleId,
+    ruleName: rule?.name ?? '',
+    items: run.excluded.filter((item) => item.ruleId === ruleId)
+  };
 });
 </script>
 
@@ -141,6 +160,29 @@ const neighbours = computed(() => {
         </ul>
       </div>
       <p v-else-if="neighbours.length === 0" class="meta">该区间无重叠竞争者，直接保留。</p>
+    </div>
+
+    <div v-if="excludedView" class="excluded-view" data-testid="excluded-panel">
+      <div class="excluded-head">
+        <h3>
+          规则 {{ excludedView.ruleId }}<template v-if="excludedView.ruleName"> · {{ excludedView.ruleName }}</template>
+          的例外命中（{{ excludedView.items.length }} 处未遮蔽，按原文顺序）
+        </h3>
+        <button type="button" class="ghost" data-testid="excluded-view-close" @click="closeExcludedView">收起</button>
+      </div>
+      <p v-if="excludedView.items.length === 0" class="meta">
+        当前有效结果中该规则没有被例外值剔除的命中。
+      </p>
+      <ul v-else class="excluded-list">
+        <li v-for="(item, i) in excludedView.items" :key="i" data-testid="excluded-item">
+          <code>[{{ item.start }}, {{ item.end }})</code>
+          <code class="frag">{{ item.matched }}</code>
+        </li>
+      </ul>
+      <p class="meta">
+        以上原文片段与例外值全量精确相等，未遮蔽、不参与裁决，也不进入审阅清单与导出文件；
+        若规则为导出前必检，例外造成的残留会被必检复核拦截。
+      </p>
     </div>
   </section>
 </template>

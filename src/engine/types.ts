@@ -24,6 +24,12 @@ export interface RedactionRule {
   order: number;
   /** 规则文件中的 enabled 初值；界面启停以此为基础。 */
   enabledByDefault: boolean;
+  /**
+   * 例外值清单（缺省为空数组）：原文命中文本与其中任一项【全量精确】相等时，
+   * 该命中在模板展开后、重叠裁决前被剔除，不遮蔽、不进入清单与导出。
+   * 比较是否忽略大小写跟随该规则的 i 标志。
+   */
+  excludedValues: string[];
   /** 编译后的正则（恒含 g 标志）。 */
   regex: RegExp;
 }
@@ -90,6 +96,20 @@ export interface RejectedCandidate extends Candidate {
   winnerEnd: number;
 }
 
+/**
+ * 被规则例外值剔除的命中：原文命中文本与例外值全量精确相等，
+ * 在裁决前移除，不遮蔽、不进入 AcceptedInterval、人工确认清单与导出文件。
+ */
+export interface ExcludedCandidate {
+  ruleId: string;
+  ruleName: string;
+  ruleIndex: number;
+  start: number;
+  end: number;
+  /** 命中的原文片段（与某个例外值全量精确相等）。 */
+  matched: string;
+}
+
 export interface DefeatedRef {
   ruleId: string;
   ruleName: string;
@@ -140,6 +160,8 @@ export interface RunOk {
   segments: Segment[];
   accepted: AcceptedInterval[];
   rejected: RejectedCandidate[];
+  /** 被规则例外值剔除的命中（按原文顺序），供规则面板与详情区核对。 */
+  excluded: ExcludedCandidate[];
   checklist: ChecklistEntry[];
   /** 本次参与计算的规则（仅启用的）。 */
   activeRules: RedactionRule[];

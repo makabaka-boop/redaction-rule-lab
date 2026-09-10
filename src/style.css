@@ -115,6 +115,33 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .badge.pending { background: #fef3c7; color: #b45309; }
 .badge.confirmed { background: #d1fae5; color: var(--ok); }
 
+/* 规则例外值：排除数按钮与详情区的未遮蔽片段清单。 */
+button.excluded-count {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+button.excluded-count:hover:not(:disabled) { background: #e0e7ff; }
+button.excluded-count.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.excluded-count:disabled { opacity: 0.55; cursor: default; }
+
+.excluded-view {
+  margin-top: 12px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.excluded-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.excluded-head h3 { margin: 0; color: #3730a3; }
+.excluded-list { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
+.excluded-list li { margin: 3px 0; }
+.excluded-view .meta { color: #4338ca; }
+
 /* 人工复核：待确认遮蔽块使用琥珀色虚边，与普通遮蔽块区分。 */
 .text-view .mask.review-pending {
   background: #fde68a;

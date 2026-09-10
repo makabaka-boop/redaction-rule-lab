@@ -297,6 +297,102 @@ test('稳定键无歧义：编号/替换内容含制表符时，碰撞三元组�
   await expect(exportChecklist).toBeEnabled();
 });
 
+test('规则例外值：命中剔除不遮蔽且可核对片段，删除例外后恢复遮蔽并完成确认下载', async ({ page }) => {
+  const exportRedacted = page.getByTestId('export-redacted');
+  const exportChecklist = page.getByTestId('export-checklist');
+
+  const phoneRule = {
+    id: 'P1',
+    name: '手机号',
+    pattern: '1[3-9]\\d{9}',
+    priority: 90,
+    template: '[手机号]',
+    mustCheck: false
+  };
+  const nameRule = {
+    id: 'RV1',
+    name: '联系人姓名',
+    pattern: '(?<=联系人：)[\\u4e00-\\u9fa5]{2,4}',
+    flags: 'u',
+    priority: 80,
+    template: '[姓名]',
+    mustCheck: false,
+    reviewRequired: true
+  };
+  const sourceText = '甲方联系人：王建国，电话 13800001111。乙方联系人：李晓梅，电话 13755556666。';
+
+  // 载入带例外的规则：公司统一对账号码 13800001111 不遮蔽。
+  await page.locator('textarea.rules-input').fill(JSON.stringify({
+    rules: [{ ...phoneRule, excludedValues: ['13800001111'] }, nameRule]
+  }));
+  await page.locator('textarea.source-input').fill(sourceText);
+  await expect(page.locator(outputMasks).first()).toBeVisible();
+
+  // 例外号码保留原文；另一号码与两个姓名被遮蔽：共 3 个遮蔽块。
+  await expect(page.locator(outputMasks)).toHaveCount(3);
+  const outputText = await page.locator('[data-testid="output-pane"] .text-view').innerText();
+  expect(outputText).toContain('13800001111');
+  expect(outputText).not.toContain('13755556666');
+
+  // 规则面板显示该规则的排除数，点击后详情区按原文顺序展示未遮蔽片段。
+  const ruleItem = page.locator('.rule-list li', { has: page.locator('.rule-id', { hasText: /^P1$/ }) });
+  const countButton = ruleItem.getByTestId('rule-excluded-count');
+  await expect(countButton).toContainText('1');
+  await countButton.click();
+  const excludedPanel = page.getByTestId('excluded-panel');
+  await expect(excludedPanel).toBeVisible();
+  await expect(excludedPanel).toContainText('P1');
+  const excludedItems = excludedPanel.getByTestId('excluded-item');
+  await expect(excludedItems).toHaveCount(1);
+  await expect(excludedItems.first()).toContainText('13800001111');
+  await expect(excludedItems.first()).toContainText(/\[\d+, \d+\)/);
+  // 例外命中不进入审阅清单：清单 3 行且不含例外号码。
+  const checklistRows = page.locator('[data-testid="checklist-table"] tbody tr');
+  await expect(checklistRows).toHaveCount(3);
+  await expect(page.getByTestId('checklist-table')).not.toContainText('13800001111');
+
+  // 删除例外后该片段恢复遮蔽：遮蔽块变为 4 个，排除数归零，清单出现该号码条目。
+  await page.locator('textarea.rules-input').fill(JSON.stringify({ rules: [phoneRule, nameRule] }));
+  await expect(page.locator(outputMasks)).toHaveCount(4);
+  const outputAfter = await page.locator('[data-testid="output-pane"] .text-view').innerText();
+  expect(outputAfter).not.toContain('13800001111');
+  await expect(ruleItem.getByTestId('rule-excluded-count')).toContainText('0');
+  await expect(checklistRows).toHaveCount(4);
+
+  // 完成原有人工确认流程：两个姓名待确认，确认全部后导出入口开放。
+  await expect(page.getByTestId('review-pending-count')).toHaveText('2');
+  await expect(exportRedacted).toBeDisabled();
+  await expect(exportChecklist).toBeDisabled();
+  await page.getByTestId('confirm-all').click();
+  await expect(page.getByTestId('export-blocked')).toHaveCount(0);
+  await expect(exportRedacted).toBeEnabled();
+  await expect(exportChecklist).toBeEnabled();
+
+  // 下载脱敏文本与审阅清单：例外号码已被遮蔽，且从未进入清单条目。
+  const [redactedDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    exportRedacted.click()
+  ]);
+  const [checklistDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    exportChecklist.click()
+  ]);
+  const redacted = readFileSync((await redactedDownload.path()) as string, 'utf-8');
+  const checklist = JSON.parse(readFileSync((await checklistDownload.path()) as string, 'utf-8')) as {
+    reviewPendingCount: number;
+    reviewRequiredCount: number;
+    entries: Array<{ ruleId: string; source: { text: string } }>;
+  };
+  expect(redacted).not.toContain('13800001111');
+  expect(redacted).not.toContain('王建国');
+  expect(redacted).toContain('[手机号]');
+  expect(checklist.reviewPendingCount).toBe(0);
+  expect(checklist.reviewRequiredCount).toBe(2);
+  // 例外已删除：该号码作为普通命中被遮蔽并进入清单（2 姓名 + 2 号码共 4 条）。
+  expect(checklist.entries).toHaveLength(4);
+  expect(checklist.entries.filter((entry) => entry.source.text === '13800001111')).toHaveLength(1);
+});
+
 test('声明编码无法解码的本地文件：报错并锁定导出，成功读取后重新开放', async ({ page }) => {
   const exportRedacted = page.getByTestId('export-redacted');
   const exportChecklist = page.getByTestId('export-checklist');

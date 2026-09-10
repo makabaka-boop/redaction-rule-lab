@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { applyRulesText, store, toggleRule } from '../store';
+import { computed, ref } from 'vue';
+import { applyRulesText, store, toggleExcludedView, toggleRule } from '../store';
 import { decodeBytes, ENCODING_OPTIONS } from '../engine/decode';
 
 const encoding = ref('utf-8');
 const fileInput = ref<HTMLInputElement | null>(null);
+
+/** 每条规则在当前有效结果中被例外值剔除的命中数（随输入与规则重算）。 */
+const excludedCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const item of store.run?.excluded ?? []) {
+    counts.set(item.ruleId, (counts.get(item.ruleId) ?? 0) + 1);
+  }
+  return counts;
+});
+
+function excludedCount(ruleId: string): number {
+  return excludedCounts.value.get(ruleId) ?? 0;
+}
 
 async function onFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
@@ -45,7 +58,7 @@ async function loadSample(): Promise<void> {
 
 <template>
   <section class="panel">
-    <h2>② 脱敏规则 <span class="hint">本地 JSON，字段含名称 / 正则 / 优先级 / 模板 / 必检 / 人工复核</span></h2>
+    <h2>② 脱敏规则 <span class="hint">本地 JSON，字段含名称 / 正则 / 优先级 / 模板 / 必检 / 人工复核 / 例外值 excludedValues</span></h2>
     <textarea
       class="rules-input mono"
       :value="store.rulesText"
@@ -84,6 +97,15 @@ async function loadSample(): Promise<void> {
           <em v-if="rule.mustCheck" class="badge must">导出前必检</em>
           <em v-if="rule.reviewRequired" class="badge review">人工复核</em>
           <em v-if="store.disabledRuleIds.has(rule.id)" class="badge off">已停用</em>
+          <button
+            type="button"
+            class="excluded-count"
+            :class="{ active: store.excludedViewRuleId === rule.id }"
+            :disabled="excludedCount(rule.id) === 0"
+            :title="rule.excludedValues.length > 0 ? `配置 ${rule.excludedValues.length} 个例外值；点击查看当前结果中被剔除的未遮蔽片段` : '未配置例外值'"
+            data-testid="rule-excluded-count"
+            @click="toggleExcludedView(rule.id)"
+          >排除 {{ excludedCount(rule.id) }}</button>
         </span>
         <code class="rule-pattern">/{{ rule.pattern }}/{{ rule.flags }}</code>
       </li>
