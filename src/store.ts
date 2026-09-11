@@ -3,6 +3,12 @@ import type { EngineError, RedactionRule, RunOk } from './engine/types';
 import { parseRulesJson } from './engine/rules';
 import { runPipeline } from './engine/pipeline';
 import { entryKey, reconcileReview, reviewEntries, withAllConfirmed, withConfirmed } from './engine/review';
+import {
+  parseSamplesJson,
+  runRegression,
+  type RegressionReport,
+  type RegressionSample
+} from './engine/regression';
 
 /** 一次重算中被撤销的人工确认（用于页面提示，可定位到规则编号与原文区间）。 */
 export interface ReviewRevocation {
@@ -42,7 +48,24 @@ export const store = reactive({
   /** 已人工确认区间的稳定键集合（规则编号 + 原文区间 + 替换内容）。 */
   confirmedReviewKeys: new Set<string>(),
   /** 最近一次成功重算中被撤销的确认（重算成功时刷新；失败保留，与上一份有效结果一致）。 */
-  reviewRevocations: [] as ReviewRevocation[]
+  reviewRevocations: [] as ReviewRevocation[],
+
+  // —— 本地「回归样例集」闭环：样例与报告仅驻留浏览器内存，绝不参与正式导出 ——
+  /** 当前样例集；样例文件解析失败时保留上一份有效样例集。 */
+  regSamples: [] as RegressionSample[],
+  /** 当前样例集对应的最近一次回归报告；解析/管线失败时保留上一份有效报告。 */
+  regReport: null as RegressionReport | null,
+  /** 样例文件语法或字段错误（定位到样例编号或数组下标）。 */
+  regErrors: [] as EngineError[],
+  /** 当前样例文件名（仅用于界面提示）。 */
+  regFileName: '',
+  /**
+   * 当前报告是否相对最新规则已过期：规则启停、规则文本或其启停初值变化后置 true，
+   * 下次成功重算时按新规则重跑回归并清掉。报告始终保留上一份有效内容。
+   */
+  regStale: false,
+  /** 失败样例详情面板当前展开的样例下标；-1 表示收起。 */
+  regSelectedIndex: -1
 });
 
 let recomputeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -58,6 +81,9 @@ export function recompute(): void {
     clearTimeout(recomputeTimer);
     recomputeTimer = null;
   }
+  // 回归样例复用当前有效规则与完整管线，独立于主原文：即使主原文为空、
+  // 主计算提前返回，样例仍需照常执行。
+  rerunRegression();
   if (store.sourceText.length === 0 || store.rules.length === 0) {
     // 输入不完整不属于错误，只是没有可计算的内容；保留旧结果并在界面上提示。
     store.runErrors = [];
@@ -130,6 +156,9 @@ export function applyRulesText(text: string): void {
     scheduleRecompute();
   } else {
     store.ruleErrors = parsed.errors;
+    // 规则文本非法时主计算不会重跑；回归报告同样相对最新输入过期，
+    // 但沿用上一份有效报告直到规则恢复合法后自动重跑。
+    markRegressionStale();
   }
 }
 
@@ -232,4 +261,104 @@ export function initStoreWatchers(): void {
     () => store.sourceText,
     () => scheduleRecompute()
   );
+}
+
+// ————————————————————————————————————————————————————————————————————
+// 本地回归样例集闭环
+//
+// 不变量（与主管线一致）：
+//   - 样例文件语法/字段错误：保留上一份有效样例集与报告，只更新 regErrors；
+//   - 单项管线失败：只记录该项原有错误（规则编号与位置），不覆盖其它项；
+//   - 回归检查是只读旁路：不改变规则启停、人工确认、例外审阅与下载闸门，
+//     样例原文/结果只在内存中，不进入导出物。
+// ————————————————————————————————————————————————————————————————————
+
+/** 当前有效规则的指纹：规则内容或界面启停变化都会改变，用于把报告标记为过期。 */
+function rulesFingerprint(): string {
+  return JSON.stringify({
+    disabled: [...store.disabledRuleIds].sort(),
+    rules: store.rules.map((rule) => [
+      rule.id,
+      rule.pattern,
+      rule.flags,
+      rule.priority,
+      rule.template,
+      rule.mustCheck,
+      rule.reviewRequired,
+      rule.excludedValues
+    ])
+  });
+}
+
+/** 生成当前报告时使用的规则指纹；无报告时为空串。 */
+let regressionFingerprint = '';
+
+/** 规则已变化但报告尚未按新规则重跑：标记过期，等待下一次重算。 */
+function markRegressionStale(): void {
+  if (store.regReport !== null) store.regStale = true;
+}
+
+/**
+ * 按当前有效规则重跑回归。只在有样例集时执行；规则存在解析错误、
+ * 或当前没有任何启用规则时无法构造管线输入，报告标记过期并原样保留。
+ */
+function rerunRegression(): void {
+  if (store.regSamples.length === 0) return;
+  if (store.ruleErrors.length > 0 || store.rules.length === 0) {
+    markRegressionStale();
+    return;
+  }
+  const activeRules = store.rules.filter((rule) => !store.disabledRuleIds.has(rule.id));
+  // 全部规则停用时 activeRules 为空：runRegression 让每个样例各自得到
+  // 管线原有的「没有已启用的规则」错误并逐项展示，不影响其它（此处不会发生）样例。
+  store.regReport = runRegression(store.regSamples, activeRules, store.rules);
+  store.regStale = false;
+  regressionFingerprint = rulesFingerprint();
+  if (
+    store.regSelectedIndex >= 0 &&
+    store.regSelectedIndex >= store.regReport.results.length
+  ) {
+    store.regSelectedIndex = -1;
+  }
+}
+
+/**
+ * 载入样例 JSON 文本（来自本地文件，UTF-8 由调用方解码）。
+ * 解析失败（语法、编号重复、字段类型错误）时保留上一份有效样例集与报告。
+ */
+export function applySamplesText(text: string, fileName = ''): void {
+  const parsed = parseSamplesJson(text);
+  if (!parsed.ok) {
+    // 样例文件本身有误：上一份有效样例集与报告原样保留。报告仍是按当前规则
+    // 生成的，不属于“规则变化导致过期”，因此不置 stale。
+    store.regErrors = parsed.errors;
+    return;
+  }
+  store.regSamples = parsed.samples;
+  store.regErrors = [];
+  store.regFileName = fileName;
+  store.regSelectedIndex = -1;
+  // 用户选择样例文件后自动运行：复用当前有效规则与完整管线，按文件顺序产出。
+  runRegressionNow();
+}
+
+/** 立即按当前规则重跑回归（供样例载入与界面「立即重跑」使用）。 */
+export function runRegressionNow(): void {
+  rerunRegression();
+}
+
+/** 规则指纹相对生成报告时已变化（供面板提示与测试断言）。 */
+export function isRegressionStale(): boolean {
+  if (store.regReport === null) return false;
+  return store.regStale || regressionFingerprint !== rulesFingerprint();
+}
+
+/** 点击失败项：展开/收起首个差异详情。 */
+export function selectRegressionItem(index: number): void {
+  store.regSelectedIndex = store.regSelectedIndex === index ? -1 : index;
+}
+
+/** 关闭回归面板的样例文件错误提示（不清除上一份有效报告）。 */
+export function dismissRegressionErrors(): void {
+  store.regErrors = [];
 }

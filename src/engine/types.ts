@@ -49,7 +49,10 @@ export interface EngineError {
     | 'ENCODING_UNSUPPORTED'
     | 'DECODE_FAILED'
     | 'NO_RULES_ENABLED'
-    | 'SOURCE_EMPTY';
+    | 'SOURCE_EMPTY'
+    | 'SAMPLES_JSON_INVALID'
+    | 'SAMPLES_SHAPE_INVALID'
+    | 'SAMPLE_FIELD_INVALID';
   message: string;
   /** 相关规则编号（若有）。 */
   ruleId?: string;

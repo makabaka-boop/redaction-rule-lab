@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue';
 import { store, initStoreWatchers, applyRulesText, setSourceText } from './store';
 import SourcePanel from './components/SourcePanel.vue';
 import RulesPanel from './components/RulesPanel.vue';
+import RegressionPanel from './components/RegressionPanel.vue';
 import CompareView from './components/CompareView.vue';
 import DetailPanel from './components/DetailPanel.vue';
 import ExportPanel from './components/ExportPanel.vue';
@@ -39,6 +40,7 @@ onMounted(async () => {
       <aside class="side">
         <SourcePanel />
         <RulesPanel />
+        <RegressionPanel />
       </aside>
 
       <section class="workspace">

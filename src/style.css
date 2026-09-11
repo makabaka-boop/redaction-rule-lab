@@ -231,6 +231,80 @@ table.checklist tbody tr.pending:hover { background: #fef3c7; }
 .error-box.io { border-color: #b45309; background: var(--warn-bg); }
 .error-box.io strong, .error-box.io .loc { color: #b45309; }
 
+/* 本地回归样例集：独立旁路面板，不触碰规则启停、人工确认与下载闸门。 */
+.panel.regression { border-color: #c7d2fe; }
+.panel.regression h2 { color: #3730a3; }
+.reg-error-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+
+.reg-summary {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  font-size: 0.82rem;
+  color: #3730a3;
+}
+.reg-summary.done { background: #ecfdf5; border-color: var(--ok); color: #065f46; }
+.reg-summary strong { font-size: 0.95rem; }
+.reg-fail { color: var(--err); font-weight: 600; }
+.reg-stale { color: #b45309; }
+.reg-ok { color: var(--ok); }
+
+.reg-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.reg-item { border: 1px solid var(--line); border-radius: 8px; padding: 0; overflow: hidden; }
+.reg-item.pass { background: #f6fdf9; border-color: #a7f3d0; }
+.reg-item.text-mismatch, .reg-item.sequence-mismatch { background: #fffdf5; border-color: #fcd34d; }
+.reg-item.pipeline-error { background: var(--err-bg); border-color: #fca5a5; }
+.reg-item-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+.reg-item-head:disabled { cursor: default; opacity: 1; }
+.reg-item-id { font-weight: 700; }
+.reg-item-hint { margin-left: auto; font-size: 0.72rem; color: var(--muted); }
+button.reg-item-head:not(:disabled):hover { background: rgba(0, 0, 0, 0.03); }
+.reg-status-badge {
+  font-style: normal;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 0.68rem;
+}
+.reg-status-badge.pass { background: #d1fae5; color: var(--ok); }
+.reg-status-badge.text-mismatch, .reg-status-badge.sequence-mismatch { background: #fef3c7; color: #b45309; }
+.reg-status-badge.pipeline-error { background: #fee2e2; color: var(--err); }
+
+.reg-detail { border-top: 1px dashed var(--line); padding: 8px 10px; font-size: 0.78rem; }
+.reg-detail-title { margin: 0 0 6px; font-weight: 600; }
+.reg-detail-ok { margin: 0 0 6px; color: var(--ok); }
+.reg-diff dl { display: grid; grid-template-columns: 64px 1fr; gap: 4px 10px; margin: 0 0 8px; }
+.reg-diff dt { color: var(--muted); }
+.reg-diff dd { margin: 0; word-break: break-all; }
+.reg-errors { margin: 4px 0 0; padding-left: 18px; }
+.reg-errors li { margin: 3px 0; }
+
+.reg-seq { margin-top: 8px; }
+.reg-seq-lines { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.seq-line { display: flex; gap: 8px; align-items: center; border-radius: 4px; padding: 2px 6px; font-size: 0.76rem; }
+.seq-line.same { background: #f1f5f9; }
+.seq-line.actual-only { background: #fee2e2; }
+.seq-line.expected-only { background: #fef3c7; }
+.seq-tag { font-style: normal; border-radius: 3px; padding: 0 5px; font-size: 0.66rem; }
+.seq-same { background: #dbeafe; color: #1e40af; }
+.seq-actual { background: #fecaca; color: #991b1b; }
+.seq-expected { background: #fde68a; color: #92400e; }
+.seq-side { color: var(--muted); font-size: 0.7rem; }
+
 .empty-hint {
   border: 1px dashed var(--line);
   border-radius: 10px;
